@@ -5,7 +5,6 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
-
 # Streamlit Seiten-Konfiguration (Muss ganz oben stehen)
 st.set_page_config(
     page_title="Digitale Auswertung Barrierefreiheit & Brandschutz",
@@ -16,22 +15,22 @@ st.title("🏢 Prüftool: Barrierefreiheit & Brandschutz")
 st.markdown("Lade deine Excel-Gebäudeanalyse hoch, um Berichte, Mängellisten und den Vulnerabilitätsindex live auszuwerten.")
 
 # --------------------------------------------------
-# 1. Einstellungen & interaktive Sidebar
+# 1. Interaktive Steuerung direkt in der Mitte
 # --------------------------------------------------
 
-st.sidebar.header("⚙️ Einstellungen")
-
-# Interaktiver Datei-Upload
-hochgeladene_datei = st.sidebar.file_uploader(
-    "1. Excel-Gebäudeanalyse hochladen", 
+# Das Upload-Feld prominent in der Mitte
+hochgeladene_datei = st.file_uploader(
+    "1. Bitte lade hier deine Excel-Gebäudeanalyse ('GebaeudeanalyseV1.xlsx') hoch:", 
     type=["xlsx"]
 )
 
-# Dynamische Bauteilauswahl
-auswahl_bauteil = st.sidebar.selectbox(
-    "2. Detailbericht für welches Bauteil?",
+# Die Bauteilauswahl direkt darunter in der Mitte
+auswahl_bauteil = st.selectbox(
+    "2. Für welches Bauteil möchtest du den Detailbericht sehen?",
     ["Tür", "Flur", "Treppe", "Handlauf", "Rauchmelder", "Leitsystem"]
 )
+
+st.markdown("---") # Trennlinie für eine saubere Optik
 
 # --------------------------------------------------
 # 3. Hilfsfunktion: Werte aus Excel umwandeln
