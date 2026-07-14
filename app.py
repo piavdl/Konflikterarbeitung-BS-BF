@@ -6,9 +6,9 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import re 
-# JETZT NEU: Absicherung gegen Matplotlib-Abstürze (Segmentation Faults)
-from matplotlib.backends.backend_agg import RendererAgg
-_lock = RendererAgg.lock
+# JETZT NEU: Sicheres Standard-Threading für stabile Grafiken ohne Abstürze
+import threading
+_lock = threading.Lock()
 def pruefe_passwort():
     """Gibt True zurück, wenn das Passwort korrekt ist."""
     if "authentifiziert" not in st.session_state:
