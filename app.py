@@ -21,7 +21,7 @@ st.markdown("Lade deine Excel-Gebäudeanalyse hoch, um Berichte, Mängellisten u
 
 # Das Upload-Feld prominent in der Mitte
 hochgeladene_datei = st.file_uploader(
-    "1. Bitte lade hier deine Excel-Gebäudeanalyse ('GebaeudeanalyseV1.xlsx') hoch:", 
+    "1. Bitte lade hier deine Excel-Gebäudeanalyse hoch:", 
     type=["xlsx"]
 )
 
@@ -114,8 +114,9 @@ if hochgeladene_datei is not None:
     # Spaltennamen bereinigen (mit dem re.sub-Fix für die doppelten Leerzeichen bei Türen/Fluren)
     df.columns = [re.sub(r'\s+', ' ', str(c)).strip() for c in df.columns]
 
-    # Platzhalter als leere Werte behandeln
-    df = df.replace(["-", " - ", "--", ""], pd.NA)
+    # Platzhalter als leere Werte behandeln (Speicherschonend ohne Absturz!)
+    for col in df.columns:
+        df[col] = df[col].astype(str).replace(["-", " - ", "--", "", "nan", "None"], None)
 
     # --------------------------------------------------
     # 4. Zahlen-Spalten erzeugen
