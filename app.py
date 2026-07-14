@@ -1,10 +1,11 @@
-# ==================================================
+# =====================================================================
 # DIGITALE AUSWERTUNG BARRIEREFREIHEIT / BRANDSCHUTZ
-# ==================================================
+# Universitäres Projekt - IPE RWTH Aachen (Sommersemester 2026)
+# =====================================================================
 
 import streamlit as st
 
-# 1. Streamlit Seiten-Konfiguration MUSS zwingend als ALLERERSTES kommen!
+# 1. Streamlit Seiten-Konfiguration (MUSS zwingend als ALLERERSTES kommen!)
 st.set_page_config(
     page_title="Digitale Auswertung Barrierefreiheit & Brandschutz",
     layout="wide"
@@ -14,94 +15,18 @@ import pandas as pd
 import re 
 import threading
 
-# Zwingt Matplotlib in den sicheren Server-Modus ohne Absturz
+# Zwingt Matplotlib in den sicheren, kopflosen Server-Modus ohne Absturz auf Linux/Web-Servern
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
+# Thread-Sperre für Matplotlib zur Vermeidung von Serverkonflikten bei mehreren Nutzern
 _lock = threading.Lock()
 
-# ==================================================
-# HILFSFUNKTIONEN (Müssen ganz oben stehen!)
-# ==================================================
-def finde_echten_spaltennamen(df_columns, gesuchter_name):
-    """Sucht eine Spalte im DataFrame, ignoriert dabei Groß-/Kleinschreibung und Leerzeichen-Fehler."""
-    if gesuchter_name is None or pd.isna(gesuchter_name):
-        return None
-    
-    # Den gesuchten Namen normalisieren (Kleinbuchstaben, Leerzeichen trimmen, doppelte Leerzeichen entfernen)
-    normalisierter_suchname = re.sub(r'\s+', ' ', str(gesuchter_name)).strip().lower()
-    
-    for spalte in df_columns:
-        if re.sub(r'\s+', ' ', str(spalte)).strip().lower() == normalisierter_suchname:
-            return spalte # Gibt den echten Spaltennamen zurück, wie er in Excel existiert
-            
-    return None
 
-def wert_aus_text(wert):
-    if pd.isna(wert):
-        return None
-
-    text = str(wert).strip().lower()
-
-    if text in ["", "-", "--"]:
-        return None
-
-    text = text.replace(" ", "")
-    text = text.replace(",", ".")
-
-    # Bereich, z. B. 26-37cm
-    if "-" in text:
-        text = text.replace("cm", "").replace("m", "")
-        teile = text.split("-")
-
-        min_wert = float(teile[0])
-        max_wert = float(teile[1])
-
-        if min_wert > 5:
-            min_wert = min_wert / 100
-        max_wert = max_wert / 100
-
-        return (min_wert, max_wert)
-
-    # Einzelwert
-    text = text.replace("cm", "").replace("m", "")
-    try:
-        zahl = float(text)
-        if zahl > 5:
-            zahl = zahl / 100
-        return zahl
-    except ValueError:
-        return None
-
-def pruefe_ampel(ist, soll):
-    if ist is None or pd.isna(ist):
-        return ""
-    if soll is None:
-        return ""
-    if isinstance(soll, tuple):
-        soll_min, soll_max = soll
-        if soll_min <= ist <= soll_max:
-            return "🟢"
-        return "🔴"
-    if pd.isna(soll):
-        return ""
-    if ist >= soll:
-        return "🟢"
-    return "🔴"
-
-def pruefe_ja_nein(wert):
-    if pd.isna(wert):
-        return ""
-    if str(wert).strip() in ["1", "1.0", "ja", "true", "x", "X"]:
-        return "🟢"
-    if str(wert).strip() in ["0", "0.0", "nein", "false"]:
-        return "🔴"
-    return ""
-
-# --------------------------------------------------
-# PASSPORT-SCHUTZ BEREICH
-# --------------------------------------------------
+# ---------------------------------------------------------------------
+# PASSPORT-SCHUTZ BEREICH (ZUGANGSKONTROLLE)
+# ---------------------------------------------------------------------
 def pruefe_passwort():
     """Gibt True zurück, wenn das Passwort korrekt ist."""
     if "authentifiziert" not in st.session_state:
@@ -117,7 +42,7 @@ def pruefe_passwort():
     passwort = st.text_input("Passwort eingeben:", type="password")
     
     if st.button("Anmelden"):
-        if passwort == "IPE_2026": # <-- Hier dein Wunschpasswort eintragen
+        if passwort == "IPE_2026":
             st.session_state["authentifiziert"] = True
             st.rerun()
         else:
@@ -125,62 +50,261 @@ def pruefe_passwort():
             
     return False
 
-# Erst das Passwort prüfen. Wenn falsch, stoppt das Skript hier.
+# Falls nicht eingeloggt, stoppt das Skript sofort hier
 if not pruefe_passwort():
     st.stop()
 
-# --------------------------------------------------
-# INTERAKTIVE SEITENLEISTE (DESIGN AUS DEINER ALTEN DATEI)
-# --------------------------------------------------
-st.sidebar.header("⚙️ Steuerung & Filter")
-st.sidebar.markdown("Nutze diese Filter, um die Visualisierungen und Berichte der Hauptseite anzupassen.")
 
-# Das Upload-Feld elegant in der Seitenleiste platziert
-hochgeladene_datei = st.sidebar.file_uploader(
-    "1. Excel-Gebäudeanalyse hochladen:", 
+# --------------------------------------------------
+# RWTH Aachen Corporate Design & UI Optimization (CSS)
+# --------------------------------------------------
+st.markdown(
+    """
+    <style>
+        /* 1. WICHTIG: Schriftart MUSS ganz oben geladen werden */
+        @import url("https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css");
+
+        /* 2. Hintergrund der Seitenleiste in original RWTH-Blau */
+        [data-testid="stSidebar"] {
+            background-color: #00549F !important;
+        }
+        
+        /* Alle Texte in der Seitenleiste weiß machen */
+        [data-testid="stSidebar"] .stMarkdown, 
+        [data-testid="stSidebar"] p, 
+        [data-testid="stSidebar"] h3, 
+        [data-testid="stSidebar"] li,
+        [data-testid="stSidebar"] span {
+            color: #FFFFFF !important;
+        }
+        
+        /* Die Info-Box in der Seitenleiste dezent transparent/weiß stylen */
+        [data-testid="stSidebar"] .stAlert {
+            background-color: rgba(255, 255, 255, 0.15) !important;
+            border: 1px solid rgba(255, 255, 255, 0.3) !important;
+        }
+        
+        /* Trennlinien in der Seitenleiste */
+        [data-testid="stSidebar"] hr {
+            border-color: rgba(255, 255, 255, 0.3) !important;
+        }
+        
+        /* Hauptseite: Titel farblich an RWTH-Blau anpassen */
+        .rwth-title {
+            color: #00549F;
+            font-weight: 700;
+            margin-top: -15px;
+            margin-bottom: 0px;
+        }
+        
+        /* Styling für die interaktiven Tabs (Text bleibt!) */
+        button[data-baseweb="tab"] {
+            font-size: 16px !important;
+            font-weight: 600 !important;
+        }
+        button[aria-selected="true"] {
+            color: #00549F !important;
+            border-bottom-color: #00549F !important;
+        }
+
+        /* 3. ICONS AUTOMATISCH VOR DEN TEXT SETZEN */
+        
+        /* Icon für den 1. Tab (Dashboard & Indizes) */
+        button[data-baseweb="tab"]:nth-of-type(1) p::before {
+            content: "\\f4ca  "; /* Chart-Icon + Leerzeichen */
+            font-family: "bootstrap-icons" !important;
+            color: #00549F;
+            font-weight: normal;
+        }
+        
+        /* Icon für den 2. Tab (Detailbericht & Fazit) */
+        button[data-baseweb="tab"]:nth-of-type(2) p::before {
+            content: "\\f52a  "; /* Lupen-Icon + Leerzeichen */
+            font-family: "bootstrap-icons" !important;
+            color: #00549F;
+            font-weight: normal;
+        }
+        
+        /* Icon für den 3. Tab (Komplette Mängelliste) */
+        button[data-baseweb="tab"]:nth-of-type(3) p::before {
+            content: "\\f33a  "; /* Warnungs-Icon + Leerzeichen */
+            font-family: "bootstrap-icons" !important;
+            color: #00549F;
+            font-weight: normal;
+        }
+        /* Icon vor der Überschrift der Gebäude-Analyse */
+        .dashboard-title::before {
+            content: "\\f431  "; /* Wichtiges Listen-Fakten-Icon */
+            font-family: "bootstrap-icons" !important;
+            color: #00549F; /* Original RWTH-Blau */
+            font-weight: normal;
+            margin-right: 10px;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+
+# --------------------------------------------------
+# HORIZONTALER HEADER: RWTH Logo & Titel
+# --------------------------------------------------
+col_logo, col_title = st.columns([1, 4])
+
+with col_logo:
+    try:
+        st.image("RWTH_Aachen_Logo.svg", width=310)
+    except:
+        st.write("🏫 **RWTH Aachen**")
+
+with col_title:
+    st.markdown('<h1 class="rwth-title">Digitale Auswertung: Barrierefreiheit & Brandschutz</h1>', unsafe_allow_html=True)
+    st.caption("Prüftool zur Konflikterarbeitung im Rahmen des universitären Projekts | IPE RWTH Aachen")
+
+st.markdown("---")
+
+
+# --------------------------------------------------
+# SEITENLEISTE (SIDEBAR): RWTH Kursinformationen
+# --------------------------------------------------
+with st.sidebar:
+    st.markdown("### Universitäres Projekt")
+    st.info(
+        """
+        **Kurs:** Forschungsfeld: Digitale Konzepte für barrierefreies und sicheres Bauen  
+        
+        **Info:** Diese Website wurde im Rahmen eines Forschungsfeldes entwickelt und wird zu Lehrzwecken verwendet. 
+        
+        **Semester:** Sommersemester 2026  
+        
+        **Institut:** Lehr- und Forschungsgebiet für Immobilienprojektentwicklung IPE
+
+        **Betreuung:** Univ.-Prof. Dr.-Ing. Elisabeth Beusker & Shihui Li, M.Sc. RWTH
+        """
+    )
+    
+    st.markdown("### Projektmitglieder")
+    st.markdown(
+        """
+        * Victoria Steiger
+        * Pia Vor der Landwehr
+        """
+    )
+    
+    st.markdown("---")
+    st.caption("Stand: Juli 2026 | Version 1.2")
+
+
+# --------------------------------------------------
+# HAUPTSEITE: Interaktive Steuerung (Zentriert)
+# --------------------------------------------------
+st.markdown("### Datengrundlage & Analyse")
+
+hochgeladene_datei = st.file_uploader(
+    "1. Bitte lade hier deine Excel-Gebäudeanalyse hoch:", 
     type=["xlsx"]
 )
 
-# Die Bauteilauswahl in der Seitenleiste
-auswahl_bauteil = st.sidebar.selectbox(
-    "2. Bauteil für Detailbericht wählen:",
+auswahl_bauteil = st.selectbox(
+    "2. Für welches Bauteil/System möchtest du den Detailbericht sehen?",
     ["Tür", "Flur", "Treppe", "Handlauf", "Rauchmelder", "Leitsystem"]
 )
 
-st.sidebar.markdown("---")
-st.sidebar.info("💡 **Hinweis:** Nach dem Hochladen werden alle Berechnungen im Hintergrund vollautomatisch durchgeführt.")
-
-# --------------------------------------------------
-# HAUPTSEITE GESTALTUNG
-# --------------------------------------------------
-st.title("🏢 Prüftool: Barrierefreiheit & Brandschutz")
-st.markdown("Lade deine Excel-Gebäudeanalyse hoch, um Berichte, Mängellisten und den Vulnerabilitätsindex live auszuwerten.")
 st.markdown("---")
 
-# Erst ausführen, wenn auch wirklich eine Datei hochgeladen wurde
+
+# =====================================================================
+# HILFSFUNKTIONEN & ALGORITHMEN
+# =====================================================================
+
+def finde_echten_spaltennamen(df_columns, gesuchter_name):
+    """Sucht eine Spalte fehlertolerant."""
+    if gesuchter_name is None or pd.isna(gesuchter_name):
+        return None
+    normalisierter_suchname = re.sub(r'\s+', ' ', str(gesuchter_name)).strip().lower()
+    for spalte in df_columns:
+        if re.sub(r'\s+', ' ', str(spalte)).strip().lower() == normalisierter_suchname:
+            return spalte
+    return None
+
+
+def wert_aus_text(wert):
+    """Bereinigt Text-Werte aus Excel und wandelt sie in Meter-Zahlen um."""
+    if pd.isna(wert):
+        return None
+    text = str(wert).strip().lower()
+    if text in ["", "-", "--", "nan", "none"]:
+        return None
+    text = text.replace(" ", "").replace(",", ".")
+
+    if "-" in text:
+        text = text.replace("cm", "").replace("m", "")
+        teile = text.split("-")
+        min_wert = float(teile[0])
+        max_wert = float(teile[1])
+        if min_wert > 5:
+            min_wert = min_wert / 100
+        max_wert = max_wert / 100
+        return (min_wert, max_wert)
+
+    text = text.replace("cm", "").replace("m", "")
+    try:
+        zahl = float(text)
+        if zahl > 5:
+            zahl = zahl / 100
+        return zahl
+    except ValueError:
+        return None
+
+
+def pruefe_ampel(ist, soll):
+    """Vergleicht Ist- und Soll-Werte und gibt die passende Ampel zurück."""
+    if ist is None or pd.isna(ist):
+        return ""
+    if soll is None:
+        return ""
+    if isinstance(soll, tuple):
+        soll_min, soll_max = soll
+        if soll_min <= ist <= soll_max:
+            return "🟢"
+        return "🔴"
+    if pd.isna(soll):
+        return ""
+    if ist >= soll:
+        return "🟢"
+    return "🔴"
+
+
+def pruefe_ja_nein(wert):
+    """Prüft Ja/Nein-Kriterien wie Rauchmelder oder Leitsysteme."""
+    if pd.isna(wert):
+        return ""
+    if str(wert).strip() in ["1", "1.0", "ja", "true", "x", "X"]:
+        return "🟢"
+    if str(wert).strip() in ["0", "0.0", "nein", "false"]:
+        return "🔴"
+    return ""
+
+
+# =====================================================================
+# HAUPTPROGRAMM (Wird ausgeführt, sobald eine Datei vorhanden ist)
+# =====================================================================
 if hochgeladene_datei is not None:
     try:
-        # --------------------------------------------------
-        # Excel-Datei einlesen und vorbereiten
-        # --------------------------------------------------
+        # Excel-Datei einlesen (Start ab Zeile 3 wegen Header)
         df = pd.read_excel(hochgeladene_datei, header=2)
         
-        # Löscht alle Zeilen, die komplett leer sind
         if "Geschoss" in df.columns:
             df = df.dropna(subset=["Geschoss"], how="all")
         else:
             df = df.dropna(how="all")
 
-        # Spaltennamen bereinigen
         df.columns = [re.sub(r'\s+', ' ', str(c)).strip() for c in df.columns]
 
-        # Platzhalter als leere Werte behandeln
         for col in df.columns:
             df[col] = df[col].astype(str).replace(["-", " - ", "--", "", "nan", "None"], None)
 
-        # ==================================================
-        # INTELLIGENTE SPALTEN-ERZEUGUNG
-        # ==================================================
+        # Bauteil-Erzeugung falls Spalte fehlt
         if "Bauteil" not in df.columns and "Raumbez." in df.columns:
             conditions = [
                 df["Raumbez."].astype(str).str.contains("Flur|Korridor|Gang", case=False, na=False),
@@ -193,22 +317,17 @@ if hochgeladene_datei is not None:
                 df.loc[cond, "Bauteil"] = choice
             df["Bauteil"] = df["Bauteil"].fillna("Sonstiges")
 
-        # --------------------------------------------------
-        # Zahlen-Spalten erzeugen
-        # --------------------------------------------------
-        # Türen
+        # Zahlenspalten erzeugen
         if "Türbreite Ist-Wert" in df.columns:
             df["Türbreite Ist"] = df["Türbreite Ist-Wert"].apply(wert_aus_text)
             df["Türbreite Soll BF"] = df["Türbreite Soll-Wert BF"].apply(wert_aus_text)
             df["Türbreite Soll BS"] = df["Türbreite Soll-Wert BS"].apply(wert_aus_text)
 
-        # Flure
         if "Flurbreite Ist-Wert" in df.columns:
             df["Flurbreite Ist"] = df["Flurbreite Ist-Wert"].apply(wert_aus_text)
             df["Flurbreite Soll BF"] = df["Flurbreite Soll-Wert BF"].apply(wert_aus_text)
             df["Flurbreite Soll BS"] = df["Flurbreite Soll-Wert BS"].apply(wert_aus_text)
 
-        # Treppen
         if "Treppenbreite Ist-Wert" in df.columns:
             df["Treppenbreite Ist"] = df["Treppenbreite Ist-Wert"].apply(wert_aus_text)
             df["Treppenbreite Soll BF"] = df["Treppenbreite Soll-Wert BF"].apply(wert_aus_text)
@@ -220,7 +339,6 @@ if hochgeladene_datei is not None:
             df["Steigungsmaß Soll BF"] = df["Stufen Steigungsmaß Soll-Wert BF"].apply(wert_aus_text)
             df["Steigungsmaß Soll BS"] = df["Stufen Steigungsmaß Soll-Wert BS"].apply(wert_aus_text)
 
-        # Handläufe
         if "Anzahl Handläufe Ist-Wert" in df.columns:
             df["Anzahl Handläufe Ist"] = pd.to_numeric(df["Anzahl Handläufe Ist-Wert"], errors="coerce")
             df["Anzahl Handläufe Soll"] = pd.to_numeric(df["Anzahl Handläufe Soll-Wert"], errors="coerce")
@@ -228,15 +346,12 @@ if hochgeladene_datei is not None:
             df["Höhe Handlauf Soll BF"] = df["Höhe Handlauf Soll-Wert BF"].apply(wert_aus_text)
             df["Höhe Handlauf Soll BS"] = df["Höhe Handlauf Soll-Wert BS"].apply(wert_aus_text)
 
-        # Rauchmelder und Leitsystem
         if "Rauchmelder" in df.columns:
             df["Rauchmelder Ist"] = pd.to_numeric(df["Rauchmelder"], errors="coerce")
         if "Leitsystem" in df.columns:
             df["Leitsystem Ist"] = pd.to_numeric(df["Leitsystem"], errors="coerce")
 
-        # --------------------------------------------------
-        # Regeltabelle
-        # --------------------------------------------------
+        # Regeltabelle definieren
         regeln = [
             {"Bauteil": "Tür", "Kriterium": "Türbreite", "ID-Spalte": "Tür-ID", "Ist-Spalte": "Türbreite Ist", "Soll-BF-Spalte": "Türbreite Soll BF", "Soll-BS-Spalte": "Türbreite Soll BS", "Ist-Anzeige": "Türbreite Ist-Wert", "Soll-BF-Anzeige": "Türbreite Soll-Wert BF", "Soll-BS-Anzeige": "Türbreite Soll-Wert BS", "Mangel-BF": "Türbreite nach Barrierefreiheit zu gering", "Mangel-BS": "Türbreite nach Brandschutz zu gering", "Pruefart": "vergleich"},
             {"Bauteil": "Flur", "Kriterium": "Flurbreite", "ID-Spalte": "Raum-ID", "Ist-Spalte": "Flurbreite Ist", "Soll-BF-Spalte": "Flurbreite Soll BF", "Soll-BS-Spalte": "Flurbreite Soll BS", "Ist-Anzeige": "Flurbreite Ist-Wert", "Soll-BF-Anzeige": "Flurbreite Soll-Wert BF", "Soll-BS-Anzeige": "Flurbreite Soll-Wert BS", "Mangel-BF": "Flurbreite nach Barrierefreiheit zu gering", "Mangel-BS": "Flurbreite nach Brandschutz zu gering", "Pruefart": "vergleich"},
@@ -249,9 +364,6 @@ if hochgeladene_datei is not None:
             {"Bauteil": "Leitsystem", "Kriterium": "Leitsystem vorhanden", "ID-Spalte": "Raum-ID", "Ist-Spalte": "Leitsystem Ist", "Soll-BF-Spalte": None, "Soll-BS-Spalte": None, "Ist-Anzeige": "Leitsystem", "Soll-BF-Anzeige": None, "Soll-BS-Anzeige": None, "Mangel-BF": "Leitsystem nicht vorhanden", "Mangel-BS": "Leitsystem nicht vorhanden", "Pruefart": "ja_nein"}
         ]
 
-        # --------------------------------------------------
-        # Regeln anwenden
-        # --------------------------------------------------
         alle_ergebnisse = []
 
         for regel in regeln:
@@ -334,7 +446,7 @@ if hochgeladene_datei is not None:
             gesamtbericht["Ergebnis"] = gesamtbericht.apply(bewertung_aus_ampeln, axis=1)
             gesamtbericht["Wohnung"] = gesamtbericht["Wohneinheit"].fillna("Treppenhaus")
 
-            # Wohnungsübersicht & Index erstellen
+            # Gruppierung für die Wohnungstabelle
             wohnungs_uebersicht = (
                 gesamtbericht
                 .groupby(["Wohnung", "Bauteil", "Bauteil-ID"], dropna=False)
@@ -358,6 +470,7 @@ if hochgeladene_datei is not None:
 
             wohnungs_uebersicht["Ampel Gesamt"] = wohnungs_uebersicht.apply(lambda row: gesamtampel(row["Ampel BF"], row["Ampel BS"]), axis=1)
 
+            # Berechnung des Vulnerabilitätsindexes
             wohnungs_uebersicht_bewertet = wohnungs_uebersicht[wohnungs_uebersicht["Ampel Gesamt"] != ""].copy()
             vulnerabilitaet = (
                 wohnungs_uebersicht_bewertet
@@ -377,12 +490,13 @@ if hochgeladene_datei is not None:
             vulnerabilitaet["Vulnerabilitätsindex"] = (vulnerabilitaet["Gelb in %"] * 1 + vulnerabilitaet["Rot in %"] * 2) / 2
 
             # --------------------------------------------------
-            # WEBOBERFLÄCHE REGISTERKARTEN (TABS AUS DESIGNTEM CODE)
+            # TABS (DURCH CSS AUTOMATISCH MIT BI-ICONS GESTYLT)
             # --------------------------------------------------
-            tab1, tab2, tab3 = st.tabs(["📊 Dashboard & Indizes", "🔍 Detailbericht & Fazit", "⚠️ Komplette Mängelliste"])
+            tab1, tab2, tab3 = st.tabs(["Dashboard & Indizes", "Detailbericht & Fazit", "Komplette Mängelliste"])
 
+            # ---- REGISTERKARTE 1: DASHBOARD ----
             with tab1:
-                st.header("Gebäude-Vulnerabilität und Ampelverteilung")
+                st.markdown('<h3 class="dashboard-title">Gebäude-Analyse & Vulnerabilität</h3>', unsafe_allow_html=True)
                 
                 col1, col2 = st.columns(2)
                 with col1:
@@ -410,6 +524,7 @@ if hochgeladene_datei is not None:
                     plt.xticks(rotation=45)
                     st.pyplot(fig2)
 
+            # ---- REGISTERKARTE 2: DETAILBERICHTE ----
             with tab2:
                 st.header(f"Detailanalyse: {auswahl_bauteil}")
                 
@@ -433,6 +548,7 @@ if hochgeladene_datei is not None:
                     st.subheader("Gefilterte Bauteildaten")
                     st.dataframe(bericht, use_container_width=True)
 
+            # ---- REGISTERKARTE 3: MÄNGELLISTE & EXCEL DOWNLOAD ----
             with tab3:
                 st.header("Gesamte Konflikt- und Mängelliste")
                 konfliktliste = gesamtbericht[gesamtbericht["Konflikt / Mangel"] != ""][
@@ -440,11 +556,9 @@ if hochgeladene_datei is not None:
                 ]
                 
                 if not konfliktliste.empty:
-                    # Rote Mängelmeldung aus deinem alten Design
                     st.error(f"Achtung: Es wurden {len(konfliktliste)} Mängel im Gebäude identifiziert.")
                     st.dataframe(konfliktliste, use_container_width=True)
                     
-                    # EXCEL-OPTIMIERTER DOWNLOAD-BUTTON AUS DEINER ORIGINALDATEI
                     csv_daten = konfliktliste.to_csv(index=False, sep=";", encoding="utf-8-sig")
                     st.download_button(
                         label="📥 Mängelliste für Excel (.csv) herunterladen",
@@ -462,5 +576,4 @@ if hochgeladene_datei is not None:
         st.info("Bitte überprüfe, ob das Tabellenformat mit der Dateivorlage übereinstimmt.")
 
 else:
-    # Hinweistext am Anfang aus deinem alten Design
     st.info("💡 Bitte lade die Excel-Datei 'GebaeudeanalyseV1.xlsx' hoch, um die Auswertung zu starten.")
