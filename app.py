@@ -5,6 +5,7 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
+import re 
 # Streamlit Seiten-Konfiguration (Muss ganz oben stehen)
 st.set_page_config(
     page_title="Digitale Auswertung Barrierefreiheit & Brandschutz",
@@ -98,19 +99,20 @@ def pruefe_ja_nein(wert):
 
 # Erst ausführen, wenn auch wirklich eine Datei hochgeladen wurde
 if hochgeladene_datei is not None:
-    
     # --------------------------------------------------
-    # 2. Excel-Datei einlesen und vorbereiten
+    # 2. Excel-Datei einlesen und vorbereiten (Robust & Speicherschonend)
     # --------------------------------------------------
     df = pd.read_excel(hochgeladene_datei, header=2)
+    
+    # JETZT NEU: Löscht alle Zeilen, die komplett leer sind (Phantom-Zeilen vom Excel-Export)
+    # Es müssen Daten in 'Geschoss' vorhanden sein, sonst fliegt die Zeile radikal raus.
+    if "Geschoss" in df.columns:
+        df = df.dropna(subset=["Geschoss"], how="all")
+    else:
+        df = df.dropna(how="all")
 
-    # Spaltennamen bereinigen
-    df.columns = (
-        df.columns.astype(str)
-        .str.replace("\n", " ", regex=False)
-        .str.replace(r"\s+", " ", regex=True)
-        .str.strip()
-    )
+    # Spaltennamen bereinigen (mit dem re.sub-Fix für die doppelten Leerzeichen bei Türen/Fluren)
+    df.columns = [re.sub(r'\s+', ' ', str(c)).strip() for c in df.columns]
 
     # Platzhalter als leere Werte behandeln
     df = df.replace(["-", " - ", "--", ""], pd.NA)
