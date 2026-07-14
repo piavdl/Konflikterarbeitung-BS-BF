@@ -287,19 +287,28 @@ def pruefe_ja_nein(wert):
 # =====================================================================
 if hochgeladene_datei is not None:
     try:
-        # Excel-Datei einlesen (Start ab Zeile 3 wegen Header)
-        df = pd.read_excel(hochgeladene_datei, header=2)
+        # 1. Spalten begrenzen (nur A bis AG) und header=2 setzen
+        # Das verhindert, dass Pandas die leeren Spalten rechts (mit den tausenden Kommas) lädt.
+        df = pd.read_excel(hochgeladene_datei, header=2, usecols="A:AG")
         
+        # 2. Bereinigung: Erst leere Zeilen entfernen
+        df = df.dropna(how="all")
+        
+        # 3. Falls vorhanden, Geschoss-Spalte prüfen
         if "Geschoss" in df.columns:
-            df = df.dropna(subset=["Geschoss"], how="all")
-        else:
-            df = df.dropna(how="all")
+            df = df.dropna(subset=["Geschoss"])
 
+        # 4. Spaltennamen säubern
         df.columns = [re.sub(r'\s+', ' ', str(c)).strip() for c in df.columns]
 
+        # 5. Werte bereinigen (ohne das speicherintensive .astype(str) zu erzwingen)
         for col in df.columns:
-            df[col] = df[col].astype(str).replace(["-", " - ", "--", "", "nan", "None"], None)
-
+            df[col] = df[col].replace(["-", " - ", "--", "", "nan", "None"], None)
+            
+        st.success("Datei erfolgreich und speicherschonend geladen!")
+        
+    except Exception as e:
+        st.error(f"Fehler beim Laden: {e}")
         # Bauteil-Erzeugung falls Spalte fehlt
         if "Bauteil" not in df.columns and "Raumbez." in df.columns:
             conditions = [
