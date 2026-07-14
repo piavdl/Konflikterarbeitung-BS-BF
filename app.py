@@ -130,34 +130,38 @@ if not pruefe_passwort():
     st.stop()
 
 # --------------------------------------------------
-# HAUPTSEITE (Wird erst geladen, wenn das Passwort korrekt ist)
+# INTERAKTIVE SEITENLEISTE (DESIGN AUS DEINER ALTEN DATEI)
 # --------------------------------------------------
-st.title("🏢 Prüftool: Barrierefreiheit & Brandschutz")
-st.markdown("Lade deine Excel-Gebäudeanalyse hoch, um Berichte, Mängellisten und den Vulnerabilitätsindex live auszuwerten.")
+st.sidebar.header("⚙️ Steuerung & Filter")
+st.sidebar.markdown("Nutze diese Filter, um die Visualisierungen und Berichte der Hauptseite anzupassen.")
 
-# --------------------------------------------------
-# 1. Interaktive Steuerung direkt in der Mitte
-# --------------------------------------------------
-
-# Das Upload-Feld prominent in der Mitte
-hochgeladene_datei = st.file_uploader(
-    "1. Bitte lade hier deine Excel-Gebäudeanalyse hoch:", 
+# Das Upload-Feld elegant in der Seitenleiste platziert
+hochgeladene_datei = st.sidebar.file_uploader(
+    "1. Excel-Gebäudeanalyse hochladen:", 
     type=["xlsx"]
 )
 
-# Die Bauteilauswahl direkt darunter in der Mitte
-auswahl_bauteil = st.selectbox(
-    "2. Für welches Bauteil möchtest du den Detailbericht sehen?",
+# Die Bauteilauswahl in der Seitenleiste
+auswahl_bauteil = st.sidebar.selectbox(
+    "2. Bauteil für Detailbericht wählen:",
     ["Tür", "Flur", "Treppe", "Handlauf", "Rauchmelder", "Leitsystem"]
 )
 
-st.markdown("---") # Trennlinie für eine saubere Optik
+st.sidebar.markdown("---")
+st.sidebar.info("💡 **Hinweis:** Nach dem Hochladen werden alle Berechnungen im Hintergrund vollautomatisch durchgeführt.")
+
+# --------------------------------------------------
+# HAUPTSEITE GESTALTUNG
+# --------------------------------------------------
+st.title("🏢 Prüftool: Barrierefreiheit & Brandschutz")
+st.markdown("Lade deine Excel-Gebäudeanalyse hoch, um Berichte, Mängellisten und den Vulnerabilitätsindex live auszuwerten.")
+st.markdown("---")
 
 # Erst ausführen, wenn auch wirklich eine Datei hochgeladen wurde
 if hochgeladene_datei is not None:
     try:
         # --------------------------------------------------
-        # 2. Excel-Datei einlesen und vorbereiten
+        # Excel-Datei einlesen und vorbereiten
         # --------------------------------------------------
         df = pd.read_excel(hochgeladene_datei, header=2)
         
@@ -190,7 +194,7 @@ if hochgeladene_datei is not None:
             df["Bauteil"] = df["Bauteil"].fillna("Sonstiges")
 
         # --------------------------------------------------
-        # 4. Zahlen-Spalten erzeugen
+        # Zahlen-Spalten erzeugen
         # --------------------------------------------------
         # Türen
         if "Türbreite Ist-Wert" in df.columns:
@@ -231,7 +235,7 @@ if hochgeladene_datei is not None:
             df["Leitsystem Ist"] = pd.to_numeric(df["Leitsystem"], errors="coerce")
 
         # --------------------------------------------------
-        # 5. Regeltabelle
+        # Regeltabelle
         # --------------------------------------------------
         regeln = [
             {"Bauteil": "Tür", "Kriterium": "Türbreite", "ID-Spalte": "Tür-ID", "Ist-Spalte": "Türbreite Ist", "Soll-BF-Spalte": "Türbreite Soll BF", "Soll-BS-Spalte": "Türbreite Soll BS", "Ist-Anzeige": "Türbreite Ist-Wert", "Soll-BF-Anzeige": "Türbreite Soll-Wert BF", "Soll-BS-Anzeige": "Türbreite Soll-Wert BS", "Mangel-BF": "Türbreite nach Barrierefreiheit zu gering", "Mangel-BS": "Türbreite nach Brandschutz zu gering", "Pruefart": "vergleich"},
@@ -246,20 +250,17 @@ if hochgeladene_datei is not None:
         ]
 
         # --------------------------------------------------
-        # 7. Regeln anwenden
+        # Regeln anwenden
         # --------------------------------------------------
         alle_ergebnisse = []
 
         for regel in regeln:
-            # Wir suchen die Spaltennamen fehlertolerant in den tatsächlich vorhandenen Excel-Spalten
             ist_spalte_echt = finde_echten_spaltennamen(df.columns, regel["Ist-Spalte"])
             ist_anzeige_echt = finde_echten_spaltennamen(df.columns, regel["Ist-Anzeige"])
             
-            # Falls die Spalte in deiner Excel-Datei gar nicht existiert, überspringen wir die Regel einfach
             if not ist_spalte_echt or not ist_anzeige_echt:
                 continue
                 
-            # Wir nutzen jetzt die real in der Excel gefundenen Spaltennamen
             teil_df = df[df[ist_spalte_echt].notna()].copy()
             if teil_df.empty:
                 continue
@@ -294,7 +295,6 @@ if hochgeladene_datei is not None:
                     maengel.append(text)
                 return " | ".join(maengel)
 
-            # Konflikt-Text-Spalte füllen
             teil_df["Konflikt / Mangel"] = teil_df.apply(konflikttext, axis=1)
 
             soll_bf_anzeige_echt = finde_echten_spaltennamen(df.columns, regel["Soll-BF-Anzeige"])
@@ -322,9 +322,6 @@ if hochgeladene_datei is not None:
         if alle_ergebnisse:
             gesamtbericht = pd.concat(alle_ergebnisse, ignore_index=True)
             
-            # --------------------------------------------------
-            # 9. Ergebnis aus BF- und BS-Ampel ableiten
-            # --------------------------------------------------
             def bewertung_aus_ampeln(row):
                 BF = row["Ampel Barrierefreiheit"]
                 BS = row["Ampel Brandschutz"]
@@ -337,9 +334,7 @@ if hochgeladene_datei is not None:
             gesamtbericht["Ergebnis"] = gesamtbericht.apply(bewertung_aus_ampeln, axis=1)
             gesamtbericht["Wohnung"] = gesamtbericht["Wohneinheit"].fillna("Treppenhaus")
 
-            # --------------------------------------------------
-            # 10. Wohnungsübersicht & Index erstellen
-            # --------------------------------------------------
+            # Wohnungsübersicht & Index erstellen
             wohnungs_uebersicht = (
                 gesamtbericht
                 .groupby(["Wohnung", "Bauteil", "Bauteil-ID"], dropna=False)
@@ -382,21 +377,19 @@ if hochgeladene_datei is not None:
             vulnerabilitaet["Vulnerabilitätsindex"] = (vulnerabilitaet["Gelb in %"] * 1 + vulnerabilitaet["Rot in %"] * 2) / 2
 
             # --------------------------------------------------
-            # Web-Oberfläche strukturieren (Tabs)
+            # WEBOBERFLÄCHE REGISTERKARTEN (TABS AUS DESIGNTEM CODE)
             # --------------------------------------------------
             tab1, tab2, tab3 = st.tabs(["📊 Dashboard & Indizes", "🔍 Detailbericht & Fazit", "⚠️ Komplette Mängelliste"])
 
             with tab1:
                 st.header("Gebäude-Vulnerabilität und Ampelverteilung")
                 
-                # Kennzahlen im Überblick
                 col1, col2 = st.columns(2)
                 with col1:
                     st.subheader("Vulnerabilitätsindex je Wohneinheit")
                     st.dataframe(vulnerabilitaet, use_container_width=True)
                 
                 with col2:
-                    # Diagramm 1: Ampelverteilung (Sicher verpackt gegen Abstürze)
                     with _lock:
                         fig1, ax1 = plt.subplots(figsize=(6, 4))
                         ax1.bar(vulnerabilitaet["Wohnung"], vulnerabilitaet["Grün in %"], color="green", label="Grün")
@@ -409,7 +402,6 @@ if hochgeladene_datei is not None:
                         ax1.legend(loc="upper right")
                         st.pyplot(fig1)
 
-                # Diagramm 2: Vulnerabilitätsindex (Sicher verpackt gegen Abstürze)
                 st.subheader("Visualisierung Vulnerabilitätsindex")
                 with _lock:
                     fig2, ax2 = plt.subplots(figsize=(10, 3))
@@ -446,9 +438,20 @@ if hochgeladene_datei is not None:
                 konfliktliste = gesamtbericht[gesamtbericht["Konflikt / Mangel"] != ""][
                     ["Geschoss", "Wohneinheit", "Raumbez.", "Raum-ID", "Bauteil", "Bauteil-ID", "Kriterium", "Konflikt / Mangel"]
                 ]
+                
                 if not konfliktliste.empty:
+                    # Rote Mängelmeldung aus deinem alten Design
                     st.error(f"Achtung: Es wurden {len(konfliktliste)} Mängel im Gebäude identifiziert.")
                     st.dataframe(konfliktliste, use_container_width=True)
+                    
+                    # EXCEL-OPTIMIERTER DOWNLOAD-BUTTON AUS DEINER ORIGINALDATEI
+                    csv_daten = konfliktliste.to_csv(index=False, sep=";", encoding="utf-8-sig")
+                    st.download_button(
+                        label="📥 Mängelliste für Excel (.csv) herunterladen",
+                        data=csv_daten,
+                        file_name="maengelliste_brandschutz_barrierefreiheit.csv",
+                        mime="text/csv"
+                    )
                 else:
                     st.success("Hervorragend! Es wurden keine Konflikte oder Mängel gefunden.")
         else:
@@ -459,4 +462,5 @@ if hochgeladene_datei is not None:
         st.info("Bitte überprüfe, ob das Tabellenformat mit der Dateivorlage übereinstimmt.")
 
 else:
+    # Hinweistext am Anfang aus deinem alten Design
     st.info("💡 Bitte lade die Excel-Datei 'GebaeudeanalyseV1.xlsx' hoch, um die Auswertung zu starten.")
