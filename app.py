@@ -6,6 +6,36 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import re 
+# JETZT NEU: Absicherung gegen Matplotlib-Abstürze (Segmentation Faults)
+from matplotlib.backends.backend_agg import RendererAgg
+_lock = RendererAgg.lock
+def pruefe_passwort():
+    """Gibt True zurück, wenn das Passwort korrekt ist."""
+    if "authentifiziert" not in st.session_state:
+        st.session_state["authentifiziert"] = False
+
+    if st.session_state["authentifiziert"]:
+        return True
+
+    # Login-Formular anzeigen
+    st.markdown("<h2 style='color:#00549F;'>🔒 Geschützter Bereich</h2>", unsafe_allow_html=True)
+    st.info("Dieses Prüftool ist im Rahmen eines universitären Projekts geschützt. Bitte gib das Passwort ein.")
+    
+    passwort = st.text_input("Passwort eingeben:", type="password")
+    
+    if st.button("Anmelden"):
+        if passwort == "IPE_2026": # <-- Hier dein Wunschpasswort eintragen
+            st.session_state["authentifiziert"] = True
+            st.rerun()
+        else:
+            st.error("❌ Falsches Passwort. Bitte versuche es erneut.")
+            
+    return False
+
+# Erst das Passwort prüfen. Wenn falsch, stoppt das Skript hier.
+if not pruefe_passwort():
+    st.stop()
+
 # Streamlit Seiten-Konfiguration (Muss ganz oben stehen)
 st.set_page_config(
     page_title="Digitale Auswertung Barrierefreiheit & Brandschutz",
@@ -310,25 +340,27 @@ if hochgeladene_datei is not None:
                 st.dataframe(vulnerabilitaet, use_container_width=True)
             
             with col2:
-                # Diagramm 1: Ampelverteilung
-                fig1, ax1 = plt.subplots(figsize=(6, 4))
-                ax1.bar(vulnerabilitaet["Wohnung"], vulnerabilitaet["Grün in %"], color="green", label="Grün")
-                ax1.bar(vulnerabilitaet["Wohnung"], vulnerabilitaet["Gelb in %"], bottom=vulnerabilitaet["Grün in %"], color="gold", label="Gelb")
-                ax1.bar(vulnerabilitaet["Wohnung"], vulnerabilitaet["Rot in %"], bottom=vulnerabilitaet["Grün in %"] + vulnerabilitaet["Gelb in %"], color="red", label="Rot")
-                ax1.set_ylabel("Anteil [%]")
-                ax1.set_title("Ampelverteilung je Wohneinheit")
-                plt.xticks(rotation=45)
-                ax1.set_ylim(0, 100)
-                ax1.legend(loc="upper right")
-                st.pyplot(fig1)
+                # Diagramm 1: Ampelverteilung (Sicher verpackt gegen Abstürze)
+                with _lock:
+                    fig1, ax1 = plt.subplots(figsize=(6, 4))
+                    ax1.bar(vulnerabilitaet["Wohnung"], vulnerabilitaet["Grün in %"], color="green", label="Grün")
+                    ax1.bar(vulnerabilitaet["Wohnung"], vulnerabilitaet["Gelb in %"], bottom=vulnerabilitaet["Grün in %"], color="gold", label="Gelb")
+                    ax1.bar(vulnerabilitaet["Wohnung"], vulnerabilitaet["Rot in %"], bottom=vulnerabilitaet["Grün in %"] + vulnerabilitaet["Gelb in %"], color="red", label="Rot")
+                    ax1.set_ylabel("Anteil [%]")
+                    ax1.set_title("Ampelverteilung je Wohneinheit")
+                    plt.xticks(rotation=45)
+                    ax1.set_ylim(0, 100)
+                    ax1.legend(loc="upper right")
+                    st.pyplot(fig1)
 
-            # Diagramm 2: Vulnerabilitätsindex
+            # Diagramm 2: Vulnerabilitätsindex (Sicher verpackt gegen Abstürze)
             st.subheader("Visualisierung Vulnerabilitätsindex")
-            fig2, ax2 = plt.subplots(figsize=(10, 3))
-            ax2.bar(vulnerabilitaet["Wohnung"], vulnerabilitaet["Vulnerabilitätsindex"], color="gray")
-            ax2.set_ylabel("Index-Wert")
-            plt.xticks(rotation=45)
-            st.pyplot(fig2)
+            with _lock:
+                fig2, ax2 = plt.subplots(figsize=(10, 3))
+                ax2.bar(vulnerabilitaet["Wohnung"], vulnerabilitaet["Vulnerabilitätsindex"], color="gray")
+                ax2.set_ylabel("Index-Wert")
+                plt.xticks(rotation=45)
+                st.pyplot(fig2)
 
         with tab2:
             st.header(f"Detailanalyse: {auswahl_bauteil}")
