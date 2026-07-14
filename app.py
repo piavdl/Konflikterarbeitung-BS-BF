@@ -21,6 +21,84 @@ import matplotlib.pyplot as plt
 
 _lock = threading.Lock()
 
+# ==================================================
+# HILFSFUNKTIONEN (Müssen ganz oben stehen!)
+# ==================================================
+def finde_echten_spaltennamen(df_columns, gesuchter_name):
+    """Sucht eine Spalte im DataFrame, ignoriert dabei Groß-/Kleinschreibung und Leerzeichen-Fehler."""
+    if gesuchter_name is None or pd.isna(gesuchter_name):
+        return None
+    
+    # Den gesuchten Namen normalisieren (Kleinbuchstaben, Leerzeichen trimmen, doppelte Leerzeichen entfernen)
+    normalisierter_suchname = re.sub(r'\s+', ' ', str(gesuchter_name)).strip().lower()
+    
+    for spalte in df_columns:
+        if re.sub(r'\s+', ' ', str(spalte)).strip().lower() == normalisierter_suchname:
+            return spalte # Gibt den echten Spaltennamen zurück, wie er in Excel existiert
+            
+    return None
+
+def wert_aus_text(wert):
+    if pd.isna(wert):
+        return None
+
+    text = str(wert).strip().lower()
+
+    if text in ["", "-", "--"]:
+        return None
+
+    text = text.replace(" ", "")
+    text = text.replace(",", ".")
+
+    # Bereich, z. B. 26-37cm
+    if "-" in text:
+        text = text.replace("cm", "").replace("m", "")
+        teile = text.split("-")
+
+        min_wert = float(teile[0])
+        max_wert = float(teile[1])
+
+        if min_wert > 5:
+            min_wert = min_wert / 100
+        max_wert = max_wert / 100
+
+        return (min_wert, max_wert)
+
+    # Einzelwert
+    text = text.replace("cm", "").replace("m", "")
+    try:
+        zahl = float(text)
+        if zahl > 5:
+            zahl = zahl / 100
+        return zahl
+    except ValueError:
+        return None
+
+def pruefe_ampel(ist, soll):
+    if ist is None or pd.isna(ist):
+        return ""
+    if soll is None:
+        return ""
+    if isinstance(soll, tuple):
+        soll_min, soll_max = soll
+        if soll_min <= ist <= soll_max:
+            return "🟢"
+        return "🔴"
+    if pd.isna(soll):
+        return ""
+    if ist >= soll:
+        return "🟢"
+    return "🔴"
+
+def pruefe_ja_nein(wert):
+    if pd.isna(wert):
+        return ""
+    if str(wert).strip() in ["1", "1.0", "ja", "true", "x", "X"]:
+        return "🟢"
+    if str(wert).strip() in ["0", "0.0", "nein", "false"]:
+        return "🔴"
+    return ""
+
 # --------------------------------------------------
 # PASSPORT-SCHUTZ BEREICH
 # --------------------------------------------------
@@ -39,7 +117,7 @@ def pruefe_passwort():
     passwort = st.text_input("Passwort eingeben:", type="password")
     
     if st.button("Anmelden"):
-        if passwort == "IPE_2026": # <-- Euer Passwort
+        if passwort == "IPE_2026": # <-- Hier dein Wunschpasswort eintragen
             st.session_state["authentifiziert"] = True
             st.rerun()
         else:
@@ -57,6 +135,10 @@ if not pruefe_passwort():
 st.title("🏢 Prüftool: Barrierefreiheit & Brandschutz")
 st.markdown("Lade deine Excel-Gebäudeanalyse hoch, um Berichte, Mängellisten und den Vulnerabilitätsindex live auszuwerten.")
 
+# --------------------------------------------------
+# 1. Interaktive Steuerung direkt in der Mitte
+# --------------------------------------------------
+
 # Das Upload-Feld prominent in der Mitte
 hochgeladene_datei = st.file_uploader(
     "1. Bitte lade hier deine Excel-Gebäudeanalyse hoch:", 
@@ -71,74 +153,15 @@ auswahl_bauteil = st.selectbox(
 
 st.markdown("---") # Trennlinie für eine saubere Optik
 
-# --------------------------------------------------
-# 3. Hilfsfunktion: Werte aus Excel umwandeln
-# --------------------------------------------------
-def wert_aus_text(wert):
-    if pd.isna(wert) or wert is None:
-        return None
-
-    text = str(wert).strip().lower()
-
-    if text in ["", "-", "--", "none", "nan"]:
-        return None
-
-    text = text.replace(" ", "")
-    text = text.replace(",", ".")
-
-    # Bereich, z. B. 26-37cm
-    if "-" in text:
-        text = text.replace("cm", "").replace("m", "")
-        teile = text.split("-")
-        try:
-            min_wert = float(teile[0])
-            max_wert = float(teile[1])
-            if min_wert > 5: min_wert = min_wert / 100
-            if max_wert > 5: max_wert = max_wert / 100
-            return (min_wert, max_wert)
-        except ValueError:
-            return None
-
-    # Einzelwert
-    text = text.replace("cm", "").replace("m", "")
-    try:
-        zahl = float(text)
-        if zahl > 5:
-            zahl = zahl / 100
-        return zahl
-    except ValueError:
-        return None
-
-def pruefe_ampel(ist, soll):
-    if ist is None or pd.isna(ist):
-        return ""
-    if soll is None or pd.isna(soll):
-        return ""
-    if isinstance(soll, tuple):
-        soll_min, soll_max = soll
-        if soll_min <= ist <= soll_max:
-            return "🟢"
-        return "🔴"
-    if ist >= soll:
-        return "🟢"
-    return "🔴"
-
-def pruefe_ja_nein(wert):
-    if pd.isna(wert) or wert is None:
-        return ""
-    string_wert = str(wert).strip().lower()
-    if string_wert in ["1", "1.0", "ja", "vorhanden"]:
-        return "🟢"
-    if string_wert in ["0", "0.0", "nein", "fehlt"]:
-        return "🔴"
-    return ""
-
 # Erst ausführen, wenn auch wirklich eine Datei hochgeladen wurde
 if hochgeladene_datei is not None:
     try:
-        # Excel-Datei einlesen
+        # --------------------------------------------------
+        # 2. Excel-Datei einlesen und vorbereiten
+        # --------------------------------------------------
         df = pd.read_excel(hochgeladene_datei, header=2)
         
+        # Löscht alle Zeilen, die komplett leer sind
         if "Geschoss" in df.columns:
             df = df.dropna(subset=["Geschoss"], how="all")
         else:
@@ -147,9 +170,24 @@ if hochgeladene_datei is not None:
         # Spaltennamen bereinigen
         df.columns = [re.sub(r'\s+', ' ', str(c)).strip() for c in df.columns]
 
-        # Speicher-Fix für Platzhalter (Ersetzt die Absturz-Variante ohne Datenverlust)
+        # Platzhalter als leere Werte behandeln
         for col in df.columns:
             df[col] = df[col].astype(str).replace(["-", " - ", "--", "", "nan", "None"], None)
+
+        # ==================================================
+        # INTELLIGENTE SPALTEN-ERZEUGUNG
+        # ==================================================
+        if "Bauteil" not in df.columns and "Raumbez." in df.columns:
+            conditions = [
+                df["Raumbez."].astype(str).str.contains("Flur|Korridor|Gang", case=False, na=False),
+                df["Raumbez."].astype(str).str.contains("Treppe|TH|Treppenhaus", case=False, na=False),
+                df["Tür-ID"].notna() & (df["Tür-ID"] != "None") & (df["Tür-ID"] != "")
+            ]
+            choices = ["Flur", "Treppe", "Tür"]
+            df["Bauteil"] = pd.Series(pd.NA).astype(object)
+            for cond, choice in zip(conditions, choices):
+                df.loc[cond, "Bauteil"] = choice
+            df["Bauteil"] = df["Bauteil"].fillna("Sonstiges")
 
         # --------------------------------------------------
         # 4. Zahlen-Spalten erzeugen
@@ -193,7 +231,7 @@ if hochgeladene_datei is not None:
             df["Leitsystem Ist"] = pd.to_numeric(df["Leitsystem"], errors="coerce")
 
         # --------------------------------------------------
-        # 5. Regeltabelle (Deine originale Auswertungslogik!)
+        # 5. Regeltabelle
         # --------------------------------------------------
         regeln = [
             {"Bauteil": "Tür", "Kriterium": "Türbreite", "ID-Spalte": "Tür-ID", "Ist-Spalte": "Türbreite Ist", "Soll-BF-Spalte": "Türbreite Soll BF", "Soll-BS-Spalte": "Türbreite Soll BS", "Ist-Anzeige": "Türbreite Ist-Wert", "Soll-BF-Anzeige": "Türbreite Soll-Wert BF", "Soll-BS-Anzeige": "Türbreite Soll-Wert BS", "Mangel-BF": "Türbreite nach Barrierefreiheit zu gering", "Mangel-BS": "Türbreite nach Brandschutz zu gering", "Pruefart": "vergleich"},
@@ -213,41 +251,56 @@ if hochgeladene_datei is not None:
         alle_ergebnisse = []
 
         for regel in regeln:
-            if regel["Ist-Spalte"] not in df.columns:
+            # Wir suchen die Spaltennamen fehlertolerant in den tatsächlich vorhandenen Excel-Spalten
+            ist_spalte_echt = finde_echten_spaltennamen(df.columns, regel["Ist-Spalte"])
+            ist_anzeige_echt = finde_echten_spaltennamen(df.columns, regel["Ist-Anzeige"])
+            
+            # Falls die Spalte in deiner Excel-Datei gar nicht existiert, überspringen wir die Regel einfach
+            if not ist_spalte_echt or not ist_anzeige_echt:
                 continue
                 
-            teil_df = df[df[regel["Ist-Spalte"]].notna()].copy()
+            # Wir nutzen jetzt die real in der Excel gefundenen Spaltennamen
+            teil_df = df[df[ist_spalte_echt].notna()].copy()
             if teil_df.empty:
                 continue
 
             if regel.get("Pruefart") == "ja_nein":
-                teil_df["Ampel Barrierefreiheit"] = teil_df[regel["Ist-Spalte"]].apply(pruefe_ja_nein)
-                teil_df["Ampel Brandschutz"] = teil_df[regel["Ist-Spalte"]].apply(pruefe_ja_nein)
+                teil_df["Ampel Barrierefreiheit"] = teil_df[ist_spalte_echt].apply(pruefe_ja_nein)
+                teil_df["Ampel Brandschutz"] = teil_df[ist_spalte_echt].apply(pruefe_ja_nein)
             else:
-                teil_df["Ampel Barrierefreiheit"] = teil_df.apply(lambda row: pruefe_ampel(row[regel["Ist-Spalte"]], row[regel["Soll-BF-Spalte"]]), axis=1)
-                teil_df["Ampel Brandschutz"] = teil_df.apply(lambda row: pruefe_ampel(row[regel["Ist-Spalte"]], row[regel["Soll-BS-Spalte"]]), axis=1)
+                soll_bf_echt = finde_echten_spaltennamen(df.columns, regel["Soll-BF-Spalte"])
+                soll_bs_echt = finde_echten_spaltennamen(df.columns, regel["Soll-BS-Spalte"])
+                
+                teil_df["Ampel Barrierefreiheit"] = teil_df.apply(lambda row: pruefe_ampel(row[ist_spalte_echt], row[soll_bf_echt] if soll_bf_echt else None), axis=1)
+                teil_df["Ampel Brandschutz"] = teil_df.apply(lambda row: pruefe_ampel(row[ist_spalte_echt], row[soll_bs_echt] if soll_bs_echt else None), axis=1)
 
             def konflikttext(row):
                 maengel = []
+                soll_bf_anzeige_echt = finde_echten_spaltennamen(df.columns, regel["Soll-BF-Anzeige"])
+                soll_bs_anzeige_echt = finde_echten_spaltennamen(df.columns, regel["Soll-BS-Anzeige"])
+                
                 if row["Ampel Barrierefreiheit"] == "🔴":
-                    text = f"{regel['Mangel-BF']} (Kategorie: {regel['Kriterium']}, Ist: {row[regel['Ist-Anzeige']]}"
-                    if regel["Soll-BF-Anzeige"] is not None:
-                        text += f", Soll BF: {row[regel['Soll-BF-Anzeige']]}"
+                    text = f"{regel['Mangel-BF']} (Kategorie: {regel['Kriterium']}, Ist: {row[ist_anzeige_echt]}"
+                    if soll_bf_anzeige_echt is not None:
+                        text += f", Soll BF: {row[soll_bf_anzeige_echt]}"
                     text += ")"
                     maengel.append(text)
 
                 if row["Ampel Brandschutz"] == "🔴":
-                    text = f"{regel['Mangel-BS']} (Kategorie: {regel['Kriterium']}, Ist: {row[regel['Ist-Anzeige']]}"
-                    if regel["Soll-BS-Anzeige"] is not None:
-                        text += f", Soll BS: {row[regel['Soll-BS-Anzeige']]}"
+                    text = f"{regel['Mangel-BS']} (Kategorie: {regel['Kriterium']}, Ist: {row[ist_anzeige_echt]}"
+                    if soll_bs_anzeige_echt is not None:
+                        text += f", Soll BS: {row[soll_bs_anzeige_echt]}"
                     text += ")"
                     maengel.append(text)
                 return " | ".join(maengel)
 
+            # Konflikt-Text-Spalte füllen
             teil_df["Konflikt / Mangel"] = teil_df.apply(konflikttext, axis=1)
 
-            soll_bf_anzeige = teil_df[regel["Soll-BF-Anzeige"]] if regel["Soll-BF-Anzeige"] is not None else ""
-            soll_bs_anzeige = teil_df[regel["Soll-BS-Anzeige"]] if regel["Soll-BS-Anzeige"] is not None else ""
+            soll_bf_anzeige_echt = finde_echten_spaltennamen(df.columns, regel["Soll-BF-Anzeige"])
+            soll_bs_anzeige_echt = finde_echten_spaltennamen(df.columns, regel["Soll-BS-Anzeige"])
+            soll_bf_anzeige_wert = teil_df[soll_bf_anzeige_echt] if soll_bf_anzeige_echt is not None else ""
+            soll_bs_anzeige_wert = teil_df[soll_bs_anzeige_echt] if soll_bs_anzeige_echt is not None else ""
 
             ergebnis = pd.DataFrame({
                 "Geschoss": teil_df["Geschoss"],
@@ -257,10 +310,10 @@ if hochgeladene_datei is not None:
                 "Bauteil": regel["Bauteil"],
                 "Bauteil-ID": teil_df[regel["ID-Spalte"]],
                 "Kriterium": regel["Kriterium"],
-                "Ist-Wert": teil_df[regel["Ist-Anzeige"]],
-                "Sollwert Barrierefreiheit": soll_bf_anzeige,
+                "Ist-Wert": teil_df[ist_anzeige_echt],
+                "Sollwert Barrierefreiheit": soll_bf_anzeige_wert,
                 "Ampel Barrierefreiheit": teil_df["Ampel Barrierefreiheit"],
-                "Sollwert Brandschutz": soll_bs_anzeige,
+                "Sollwert Brandschutz": soll_bs_anzeige_wert,
                 "Ampel Brandschutz": teil_df["Ampel Brandschutz"],
                 "Konflikt / Mangel": teil_df["Konflikt / Mangel"]
             })
@@ -269,7 +322,9 @@ if hochgeladene_datei is not None:
         if alle_ergebnisse:
             gesamtbericht = pd.concat(alle_ergebnisse, ignore_index=True)
             
-            # Bewertung ableiten
+            # --------------------------------------------------
+            # 9. Ergebnis aus BF- und BS-Ampel ableiten
+            # --------------------------------------------------
             def bewertung_aus_ampeln(row):
                 BF = row["Ampel Barrierefreiheit"]
                 BS = row["Ampel Brandschutz"]
@@ -282,7 +337,9 @@ if hochgeladene_datei is not None:
             gesamtbericht["Ergebnis"] = gesamtbericht.apply(bewertung_aus_ampeln, axis=1)
             gesamtbericht["Wohnung"] = gesamtbericht["Wohneinheit"].fillna("Treppenhaus")
 
-            # Wohnungsübersicht & Index erstellen
+            # --------------------------------------------------
+            # 10. Wohnungsübersicht & Index erstellen
+            # --------------------------------------------------
             wohnungs_uebersicht = (
                 gesamtbericht
                 .groupby(["Wohnung", "Bauteil", "Bauteil-ID"], dropna=False)
@@ -332,12 +389,14 @@ if hochgeladene_datei is not None:
             with tab1:
                 st.header("Gebäude-Vulnerabilität und Ampelverteilung")
                 
+                # Kennzahlen im Überblick
                 col1, col2 = st.columns(2)
                 with col1:
                     st.subheader("Vulnerabilitätsindex je Wohneinheit")
                     st.dataframe(vulnerabilitaet, use_container_width=True)
                 
                 with col2:
+                    # Diagramm 1: Ampelverteilung (Sicher verpackt gegen Abstürze)
                     with _lock:
                         fig1, ax1 = plt.subplots(figsize=(6, 4))
                         ax1.bar(vulnerabilitaet["Wohnung"], vulnerabilitaet["Grün in %"], color="green", label="Grün")
@@ -350,6 +409,7 @@ if hochgeladene_datei is not None:
                         ax1.legend(loc="upper right")
                         st.pyplot(fig1)
 
+                # Diagramm 2: Vulnerabilitätsindex (Sicher verpackt gegen Abstürze)
                 st.subheader("Visualisierung Vulnerabilitätsindex")
                 with _lock:
                     fig2, ax2 = plt.subplots(figsize=(10, 3))
@@ -395,6 +455,8 @@ if hochgeladene_datei is not None:
             st.warning("⚠️ Keine auswertbaren Daten mit den aktuellen Regeln gefunden.")
 
     except Exception as e:
-        st.error(f"Fehler beim Verarbeiten der Datei: {e}")
+        st.error(f"❌ Ein kritischer Fehler ist beim Verarbeiten der Daten aufgetreten: {e}")
+        st.info("Bitte überprüfe, ob das Tabellenformat mit der Dateivorlage übereinstimmt.")
+
 else:
-    st.info("💡 Bitte lade die Excel-Datei hoch, um die Auswertung zu starten.")
+    st.info("💡 Bitte lade die Excel-Datei 'GebaeudeanalyseV1.xlsx' hoch, um die Auswertung zu starten.")
