@@ -4,11 +4,25 @@
 
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
 import re 
-# JETZT NEU: Sicheres Standard-Threading für stabile Grafiken ohne Abstürze
 import threading
+
+# JETZT NEU: Zwingt Matplotlib in den kopflosen Server-Modus (verhindert den direkten Absturz auf Linux)
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+
 _lock = threading.Lock()
+
+# Streamlit Seiten-Konfiguration (MUSS ALS ALLERERSTES AUSGEFÜHRT WERDEN!)
+st.set_page_config(
+    page_title="Digitale Auswertung Barrierefreiheit & Brandschutz",
+    layout="wide"
+)
+
+# --------------------------------------------------
+# PASSPORT-SCHUTZ BEREICH
+# --------------------------------------------------
 def pruefe_passwort():
     """Gibt True zurück, wenn das Passwort korrekt ist."""
     if "authentifiziert" not in st.session_state:
@@ -36,15 +50,11 @@ def pruefe_passwort():
 if not pruefe_passwort():
     st.stop()
 
-# Streamlit Seiten-Konfiguration (Muss ganz oben stehen)
-st.set_page_config(
-    page_title="Digitale Auswertung Barrierefreiheit & Brandschutz",
-    layout="wide"
-)
-
+# --------------------------------------------------
+# HAUPTSEITE (Wird erst geladen, wenn das Passwort korrekt ist)
+# --------------------------------------------------
 st.title("🏢 Prüftool: Barrierefreiheit & Brandschutz")
 st.markdown("Lade deine Excel-Gebäudeanalyse hoch, um Berichte, Mängellisten und den Vulnerabilitätsindex live auszuwerten.")
-
 # --------------------------------------------------
 # 1. Interaktive Steuerung direkt in der Mitte
 # --------------------------------------------------
