@@ -576,4 +576,4 @@ if hochgeladene_datei is not None:
         st.info("Bitte überprüfe, ob das Tabellenformat mit der Dateivorlage übereinstimmt.")
 
 else:
-    st.info("💡 Bitte lade die Excel-Datei 'GebaeudeanalyseV1.xlsx' hoch, um die Auswertung zu starten.")
+    st.info("💡 Bitte lade die Excel-Datei hoch, um die Auswertung zu starten.")
