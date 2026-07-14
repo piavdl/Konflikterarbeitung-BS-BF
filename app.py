@@ -5,24 +5,20 @@
 
 import streamlit as st
 
-# 1. Streamlit Seiten-Konfiguration (MUSS zwingend als ALLERERSTES kommen!)
-st.set_page_config(
-    page_title="Digitale Auswertung Barrierefreiheit & Brandschutz",
-    layout="wide"
-)
-
-import pandas as pd
-import re 
-import threading
-
-# Zwingt Matplotlib in den sicheren, kopflosen Server-Modus ohne Absturz auf Linux/Web-Servern
+# 1. Matplotlib IMMER vor allen anderen Imports konfigurieren
 import matplotlib
-matplotlib.use('Agg')
+matplotlib.use('Agg') 
 import matplotlib.pyplot as plt
 
-# Thread-Sperre für Matplotlib zur Vermeidung von Serverkonflikten bei mehreren Nutzern
-_lock = threading.Lock()
+# 2. Dann erst die Daten-Bibliotheken
+import pandas as pd
+import re
+import threading
 
+# 3. Dann erst Streamlit Konfiguration
+st.set_page_config(page_title="Digitale Auswertung", layout="wide")
+
+_lock = threading.Lock()
 
 # ---------------------------------------------------------------------
 # PASSPORT-SCHUTZ BEREICH (ZUGANGSKONTROLLE)
