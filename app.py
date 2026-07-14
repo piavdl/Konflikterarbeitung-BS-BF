@@ -287,28 +287,30 @@ def pruefe_ja_nein(wert):
 # =====================================================================
 if hochgeladene_datei is not None:
     try:
-        # 1. Spalten begrenzen (nur A bis AG) und header=2 setzen
-        # Das verhindert, dass Pandas die leeren Spalten rechts (mit den tausenden Kommas) lädt.
+        # 1. Spalten begrenzen (A bis AG) und header=2 setzen
         df = pd.read_excel(hochgeladene_datei, header=2, usecols="A:AG")
         
         # 2. Bereinigung: Erst leere Zeilen entfernen
         df = df.dropna(how="all")
         
-        # 3. Falls vorhanden, Geschoss-Spalte prüfen
+        # 3. Spaltennamen radikal säubern (Zeilenumbrüche entfernen & Normalisieren)
+        # Ersetzt \n durch Leerzeichen und entfernt doppelte Leerzeichen
+        df.columns = [re.sub(r'\s+', ' ', str(c).replace('\n', ' ')).strip() for c in df.columns]
+        
+        # 4. Spalte "Eigenschaft:" entfernen, falls sie mitgeladen wurde
+        if "Eigenschaft:" in df.columns:
+            df = df.drop(columns=["Eigenschaft:"])
+            
+        # 5. Geschoss prüfen
         if "Geschoss" in df.columns:
             df = df.dropna(subset=["Geschoss"])
 
-        # 4. Spaltennamen säubern
-        df.columns = [re.sub(r'\s+', ' ', str(c)).strip() for c in df.columns]
-
-        # 5. Werte bereinigen (ohne das speicherintensive .astype(str) zu erzwingen)
+        # 6. Werte bereinigen
         for col in df.columns:
             df[col] = df[col].replace(["-", " - ", "--", "", "nan", "None"], None)
             
         st.success("Datei erfolgreich und speicherschonend geladen!")
         
-    except Exception as e:
-        st.error(f"Fehler beim Laden: {e}")
         # Bauteil-Erzeugung falls Spalte fehlt
         if "Bauteil" not in df.columns and "Raumbez." in df.columns:
             conditions = [
