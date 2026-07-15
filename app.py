@@ -285,30 +285,32 @@ def pruefe_ja_nein(wert):
 # =====================================================================
 # HAUPTPROGRAMM (Wird ausgeführt, sobald eine Datei vorhanden ist)
 # =====================================================================
+# 1. Cache-Funktion zum sicheren Laden (OBEN im Skript platzieren, nach den Hilfsfunktionen)
+@st.cache_data
+def load_and_clean_data(file):
+    # Einlesen mit Spaltenbegrenzung und automatischer Bereinigung
+    df = pd.read_excel(file, header=2, usecols="A:AG")
+    df = df.dropna(how="all")
+    
+    # Spaltennamen säubern (Zeilenumbrüche entfernen & Normalisieren)
+    df.columns = [re.sub(r'\s+', ' ', str(c).replace('\n', ' ')).strip() for c in df.columns]
+    
+    if "Eigenschaft:" in df.columns:
+        df = df.drop(columns=["Eigenschaft:"])
+        
+    if "Geschoss" in df.columns:
+        df = df.dropna(subset=["Geschoss"])
+
+    for col in df.columns:
+        df[col] = df[col].replace(["-", " - ", "--", "", "nan", "None"], None)
+        
+    return df
+
+# 2. HAUPTPROGRAMM (Hier den alten Block ersetzen)
 if hochgeladene_datei is not None:
     try:
-        # 1. Spalten begrenzen (A bis AG) und header=2 setzen
-        df = pd.read_excel(hochgeladene_datei, header=2, usecols="A:AG")
-        
-        # 2. Bereinigung: Erst leere Zeilen entfernen
-        df = df.dropna(how="all")
-        
-        # 3. Spaltennamen radikal säubern (Zeilenumbrüche entfernen & Normalisieren)
-        # Ersetzt \n durch Leerzeichen und entfernt doppelte Leerzeichen
-        df.columns = [re.sub(r'\s+', ' ', str(c).replace('\n', ' ')).strip() for c in df.columns]
-        
-        # 4. Spalte "Eigenschaft:" entfernen, falls sie mitgeladen wurde
-        if "Eigenschaft:" in df.columns:
-            df = df.drop(columns=["Eigenschaft:"])
-            
-        # 5. Geschoss prüfen
-        if "Geschoss" in df.columns:
-            df = df.dropna(subset=["Geschoss"])
-
-        # 6. Werte bereinigen
-        for col in df.columns:
-            df[col] = df[col].replace(["-", " - ", "--", "", "nan", "None"], None)
-            
+        # Daten über die Cache-Funktion laden
+        df = load_and_clean_data(hochgeladene_datei)
         st.success("Datei erfolgreich und speicherschonend geladen!")
         
         # Bauteil-Erzeugung falls Spalte fehlt
