@@ -197,8 +197,8 @@ with st.sidebar:
 st.markdown("### Datengrundlage & Analyse")
 
 hochgeladene_datei = st.file_uploader(
-    "1. Bitte lade hier deine Excel-Gebäudeanalyse hoch:", 
-    type=["xlsx"]
+    "1. Bitte lade hier deine Gebäudeanalyse hoch (als .csv oder .xlsx):", 
+    type=["xlsx", "csv"]
 )
 
 auswahl_bauteil = st.selectbox(
@@ -286,21 +286,48 @@ def pruefe_ja_nein(wert):
 # HAUPTPROGRAMM (Wird ausgeführt, sobald eine Datei vorhanden ist)
 # =====================================================================
 # 1. Cache-Funktion zum sicheren Laden (OBEN im Skript platzieren, nach den Hilfsfunktionen)
-@st.cache_data
+@st.cache_data(max_entries=3, ttl=3600)  # max. 3 Dateien im Cache, verfällt nach 1h
 def load_and_clean_data(file):
-    # Einlesen mit Spaltenbegrenzung und automatischer Bereinigung
-    df = pd.read_excel(file, header=2, usecols="A:AG")
-    df = df.dropna(how="all")
+    df_list = []
     
-    # Spaltennamen säubern (Zeilenumbrüche entfernen & Normalisieren)
+    # 1. Fall: CSV einlesen (mit Chunking für Speicher-Optimierung)
+    if file.name.endswith('.csv'):
+        # Wir versuchen erst UTF-8, dann Latin1
+        try:
+            # Einlesen in Chunks von 500 Zeilen
+            chunks = pd.read_csv(file, sep=';', header=2, chunksize=500, engine='python', encoding='utf-8')
+        except UnicodeDecodeError:
+            file.seek(0)
+            chunks = pd.read_csv(file, sep=';', header=2, chunksize=500, engine='python', encoding='latin1')
+        
+        for chunk in chunks:
+            chunk = chunk.dropna(how="all")
+            df_list.append(chunk)
+            
+        df = pd.concat(df_list, ignore_index=True)
+
+        # Speicher-Säuberung: 
+        del df_list  # Löscht die Liste der Chunks
+        import gc
+        gc.collect() # Zwingt den RAM zur sofortigen Freigabe
+
+    # 2. Fall: Excel einlesen
+    else:
+        # Excel wird als Ganzes geladen (hier sorgt usecols für die RAM-Entlastung)
+        df = pd.read_excel(file, header=2, usecols="A:AG", engine="openpyxl")
+        df = df.dropna(how="all")
+
+    # 3. Gemeinsame Bereinigung (Spaltennamen & Werte)
+    # Leerzeichen in Spaltennamen entfernen
     df.columns = [re.sub(r'\s+', ' ', str(c).replace('\n', ' ')).strip() for c in df.columns]
     
+    # Unnötige Spalten entfernen
     if "Eigenschaft:" in df.columns:
         df = df.drop(columns=["Eigenschaft:"])
-        
     if "Geschoss" in df.columns:
         df = df.dropna(subset=["Geschoss"])
 
+    # Platzhalter/NaN bereinigen
     for col in df.columns:
         df[col] = df[col].replace(["-", " - ", "--", "", "nan", "None"], None)
         
@@ -312,6 +339,7 @@ if hochgeladene_datei is not None:
         # Daten über die Cache-Funktion laden
         df = load_and_clean_data(hochgeladene_datei)
         st.success("Datei erfolgreich und speicherschonend geladen!")
+        
         
         # Bauteil-Erzeugung falls Spalte fehlt
         if "Bauteil" not in df.columns and "Raumbez." in df.columns:
@@ -524,6 +552,7 @@ if hochgeladene_datei is not None:
                         ax1.set_ylim(0, 100)
                         ax1.legend(loc="upper right")
                         st.pyplot(fig1)
+                        plt.close(fig1)
 
                 st.subheader("Visualisierung Vulnerabilitätsindex")
                 with _lock:
@@ -532,6 +561,7 @@ if hochgeladene_datei is not None:
                     ax2.set_ylabel("Index-Wert")
                     plt.xticks(rotation=45)
                     st.pyplot(fig2)
+                    plt.close(fig2)
 
             # ---- REGISTERKARTE 2: DETAILBERICHTE ----
             with tab2:
@@ -585,4 +615,4 @@ if hochgeladene_datei is not None:
         st.info("Bitte überprüfe, ob das Tabellenformat mit der Dateivorlage übereinstimmt.")
 
 else:
-    st.info("💡 Bitte lade die Excel-Datei hoch, um die Auswertung zu starten.")
+    st.info("💡 Bitte lade die CSV-Datei hoch, um die Auswertung zu starten.")
