@@ -15,6 +15,48 @@ import pandas as pd
 import re
 import threading
 
+import io
+
+def to_excel_bytes(df, sheet_name="Tabelle1"):
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name=sheet_name)
+    return output.getvalue()
+
+def sichere_dateiname(text):
+    ersetzungen = {"ä": "ae", "ö": "oe", "ü": "ue", "Ä": "Ae", "Ö": "Oe", "Ü": "Ue", "ß": "ss"}
+    for alt, neu in ersetzungen.items():
+        text = text.replace(alt, neu)
+    return text
+from openpyxl.styles import PatternFill, Font, Alignment
+
+def to_excel_bytes_ampel(df, ampel_spalten, sheet_name="Tabelle1"):
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name=sheet_name)
+        worksheet = writer.sheets[sheet_name]
+
+        farben = {
+            "🔴": PatternFill(start_color="FFC00000", end_color="FFC00000", fill_type="solid"),
+            "🟢": PatternFill(start_color="FF00B050", end_color="FF00B050", fill_type="solid"),
+            "🟡": PatternFill(start_color="FFFFC000", end_color="FFFFC000", fill_type="solid"),
+        }
+        woerter = {"🔴": "Rot", "🟢": "Grün", "🟡": "Gelb"}
+
+        for spalte in ampel_spalten:
+            if spalte not in df.columns:
+                continue
+            col_idx = df.columns.get_loc(spalte) + 1
+            for zeile in range(2, len(df) + 2):
+                zelle = worksheet.cell(row=zeile, column=col_idx)
+                wert = zelle.value
+                if wert in farben:
+                    zelle.fill = farben[wert]
+                    zelle.value = woerter[wert]
+                    zelle.font = Font(color="FFFFFFFF", bold=True)
+                    zelle.alignment = Alignment(horizontal="center")
+
+    return output.getvalue()
 # 3. Dann erst Streamlit Konfiguration
 st.set_page_config(page_title="Digitale Auswertung", layout="wide")
 
@@ -539,6 +581,15 @@ if hochgeladene_datei is not None:
                 with col1:
                     st.subheader("Vulnerabilitätsindex je Wohneinheit")
                     st.dataframe(vulnerabilitaet, use_container_width=True)
+
+                    # NEU: Download Ampelverteilung
+                    excel_ampel = to_excel_bytes(vulnerabilitaet, sheet_name="Ampelverteilung")
+                    st.download_button(
+                        label="📥 Ampelverteilung als Excel herunterladen",
+                        data=excel_ampel,
+                        file_name="ampelverteilung.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
                 
                 with col2:
                     with _lock:
@@ -587,6 +638,15 @@ if hochgeladene_datei is not None:
                     st.subheader("Gefilterte Bauteildaten")
                     st.dataframe(bericht, use_container_width=True)
 
+                    # NEU: Download Detailbericht
+                    excel_detail = to_excel_bytes_ampel(bericht, ["Ampel Barrierefreiheit", "Ampel Brandschutz"], sheet_name="Detailbericht")
+                    st.download_button(
+                        label="📥 Detailbericht als Excel herunterladen",
+                        data=excel_detail,
+                        file_name=f"detailbericht_{sichere_dateiname(auswahl_bauteil)}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
+
             # ---- REGISTERKARTE 3: MÄNGELLISTE & EXCEL DOWNLOAD ----
             with tab3:
                 st.header("Gesamte Konflikt- und Mängelliste")
@@ -598,12 +658,13 @@ if hochgeladene_datei is not None:
                     st.error(f"Achtung: Es wurden {len(konfliktliste)} Mängel im Gebäude identifiziert.")
                     st.dataframe(konfliktliste, use_container_width=True)
                     
-                    csv_daten = konfliktliste.to_csv(index=False, sep=";", encoding="utf-8-sig")
+                    # ERSETZT: CSV-Block durch Excel-Download
+                    excel_maengel = to_excel_bytes(konfliktliste, sheet_name="Mängelliste")
                     st.download_button(
-                        label="📥 Mängelliste für Excel (.csv) herunterladen",
-                        data=csv_daten,
-                        file_name="maengelliste_brandschutz_barrierefreiheit.csv",
-                        mime="text/csv"
+                        label="📥 Mängelliste als Excel herunterladen",
+                        data=excel_maengel,
+                        file_name="maengelliste_brandschutz_barrierefreiheit.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     )
                 else:
                     st.success("Hervorragend! Es wurden keine Konflikte oder Mängel gefunden.")
